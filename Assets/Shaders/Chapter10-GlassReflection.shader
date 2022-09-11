@@ -10,13 +10,13 @@ Shader "Unity Shaders Book/Chapter10/GlassReflection"
     }
     SubShader
     {
- 		Pass
-		{
-			//we must be transparent, so other objects are drawn before this one
+				//we must be transparent, so other objects are drawn before this one
 			Tags{"Queue"="Transparent" "RenderType"="Opaque"}
 			//this pass grab the scene behind the obj into a texture
 			//we can access the result in the next pass as _RefractionTex
 			GrabPass{"_RefractionTex"}
+ 		Pass
+		{
             
 			CGPROGRAM
 			#pragma vertex vert
@@ -49,17 +49,18 @@ Shader "Unity Shaders Book/Chapter10/GlassReflection"
 			struct v2f
 			{
 				float4 pos:SV_POSITION;
+				float4 scrPos:TEXCOORD0;
 				float4 uv:TEXCOORD1;
 				float4 TtoW0:TEXCOORD2;
 				float4 TtoW1:TEXCOORD3;
-				float4 TtoW2:TEXCOORD3;
+				float4 TtoW2:TEXCOORD4;
 			};
 
 			v2f vert(a2v v)
 			{
 				v2f o;
 				o.pos=UnityObjectToClipPos(v.vertex);//把坐标从模型空间转换到裁剪空间	
-				o.scrPos=ComputeGrabScreen(o.pos);//获取对应被抓取的屏幕图像的采样坐标
+				o.scrPos=ComputeGrabScreenPos(o.pos);//获取对应被抓取的屏幕图像的采样坐标
 				o.uv.xy=TRANSFORM_TEX(v.texcoord,_MainTex);
 				o.uv.zw=TRANSFORM_TEX(v.texcoord,_BumpMap);
 
@@ -78,19 +79,26 @@ Shader "Unity Shaders Book/Chapter10/GlassReflection"
 
 			fixed4 frag(v2f i):SV_Target
 			{
-				fixed3 worldNormal=normalize(i.worldNormal);
-				fixed3 worldLightDir=normalize(UnityWorldSpaceLightDir(i.worldPos));
-				fixed3 worldViewDir=normalize(i.worldViewDir);
-				//Ambient
-				fixed3 ambient=UNITY_LIGHTMODEL_AMBIENT.xyz;//使用Unity内部变量获取环境光照
-				//DIFFUSE
-				fixed3 diffuse=_LightColor0.rgb*_Color.rgb*saturate(dot(i.worldNormal,worldLightDir));//内置变量获取光源的强度和颜色信息
-				//Reflection
-				fixed3 refraction=texCUBE(_Cubemap,i.worldRefr).rgb*_RefractColor.rgb;
+				float3 worldPos=float3(i.TtoW0.w,i.TtoW1.w,i.TtoW2.w);
+				fixed3 worldViewDir=normalize(UnityWorldSpaceViewDir(worldPos));
 
-				UNITY_LIGHT_ATTENUATION(atten,i,i.worldPos);
+				//get the normal in tangent space
+				fixed3 bump=UnpackNormal(tex2D(_BumpMap,i.uv.zw));
 
-                return fixed4(ambient+lerp(diffuse,refraction,_RefractAmount)*atten, 1.0);
+				//compute offset in tangent space
+				float2 Offset=bump.xy*_Distortion*_RefractionTex_TexelSize.xy;
+				i.scrPos.xy=Offset+i.scrPos.xy;
+				fixed3 refrCol=tex2D(_RefractionTex,i.scrPos.xy/i.scrPos.w).rgb;
+
+				//convert normal to world space
+				bump=normalize(half3(dot(i.TtoW0.xyz,bump),dot(i.TtoW1.xyz,bump),dot(i.TtoW2,bump)));
+				fixed3 reflDir=reflect(-worldViewDir,bump);
+				fixed4 texColor=tex2D(_MainTex,i.uv.xy);
+				fixed3 reflCol=texCUBE(_Cubemap,reflDir).rgb*texColor.rgb;
+
+				fixed3 finalColor=reflCol*(1-_RefractAmount)+refrCol*_RefractAmount;
+
+                return fixed4(finalColor,1);
 			}
 			ENDCG
 		}
