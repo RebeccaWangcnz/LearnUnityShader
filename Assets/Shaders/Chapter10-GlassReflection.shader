@@ -54,6 +54,7 @@ Shader "Unity Shaders Book/Chapter10/GlassReflection"
 				float4 TtoW0:TEXCOORD2;
 				float4 TtoW1:TEXCOORD3;
 				float4 TtoW2:TEXCOORD4;
+				SHADOW_COORDS(5)
 			};
 
 			v2f vert(a2v v)
@@ -73,6 +74,8 @@ Shader "Unity Shaders Book/Chapter10/GlassReflection"
 				o.TtoW0=float4(worldTangent.x,worldBinormal.x,worldNormal.x,worldPos.x);
 				o.TtoW1=float4(worldTangent.y,worldBinormal.y,worldNormal.y,worldPos.y);
 				o.TtoW2=float4(worldTangent.z,worldBinormal.z,worldNormal.z,worldPos.z);
+
+				TRANSFER_SHADOW(o);
 
 				return o;
 			}
@@ -96,6 +99,8 @@ Shader "Unity Shaders Book/Chapter10/GlassReflection"
 				fixed4 texColor=tex2D(_MainTex,i.uv.xy);
 				fixed3 reflCol=texCUBE(_Cubemap,reflDir).rgb*texColor.rgb;
 
+				//UNITY_LIGHT_ATTENUATION(atten,i,i.worldPos);
+
 				fixed3 finalColor=reflCol*(1-_RefractAmount)+refrCol*_RefractAmount;
 
                 return fixed4(finalColor,1);
@@ -104,5 +109,5 @@ Shader "Unity Shaders Book/Chapter10/GlassReflection"
 		}
        
     }
-    FallBack "Diffuse"
+    FallBack "Transparent/Cutout/VertexLit"
 }
